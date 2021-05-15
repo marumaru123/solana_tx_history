@@ -77,6 +77,68 @@ async function balanceDelta(delta, isSol) {
     }
 }
 
+async function createTokenBalancesMap(tokenBalances, pubkeys) {
+  let tokenBalancesMap = {};
+  for (let i = 0; i < tokenBalances.length; i++ ) {
+    const tokenBalance = tokenBalances[i];
+    const pubkey = pubkeys[tokenBalance['accountIndex']];
+    if (await fn3(pubkey)) {
+      tokenBalancesMap[pubkey] = tokenBalance.uiTokenAmount.uiAmount;
+    }
+  }
+  return tokenBalancesMap;
+}
+
+async function createTokenBalance(postTokenBalances, pubkeys, preTokenBalancesMap) {
+  let tokenBalanceRecord = [];
+  for (let i = 0; i < postTokenBalances.length; i++ ) {
+    const postTokenBalance = postTokenBalances[i];
+    const pubkey = pubkeys[postTokenBalance['accountIndex']];
+    if (await fn3(pubkey)) {
+      let preAmount  = preTokenBalancesMap[pubkey] ? preTokenBalancesMap[pubkey] : 0;
+      const uiAmount = postTokenBalance.uiTokenAmount.uiAmount;
+      let postAmount = uiAmount != null ? uiAmount : 0;
+      const delta    = new BigNumber(postAmount).minus(new BigNumber(preAmount));
+      const mint     = postTokenBalance['mint'];
+      if (tokenMap[mint]) {
+         tokenBalanceRecord.push(tokenMap[mint]); 
+      } else {
+         tokenBalanceRecord.push(mint); 
+      }
+      tokenBalanceRecord.push(delta); 
+      tokenBalanceRecord.push(postAmount); 
+    }
+  }
+  return tokenBalanceRecord;
+}
+
+async function createSolBalance(tx, fee) {
+  let solRecord = [];
+  for (let i = 0; i < tx.transaction.message.accountKeys.length; i++ ) {
+    const accountKey = tx.transaction.message.accountKeys[i];
+    const pre     = tx.meta.preBalances[i];
+    const post    = tx.meta.postBalances[i];
+    const pubkey  = accountKey.pubkey;
+    const key     = accountKey.pubkey.toBase58();
+    const delta   = new BigNumber(post).minus(new BigNumber(pre));
+    const sol     = await lamportsToSol(post);
+    const maximumFractionDigits = 9
+    const val = new Intl.NumberFormat("en-US", { maximumFractionDigits }).format(sol);
+    if (key === process.argv[2]) {
+      if (i === 0) {
+        solRecord.push(fee);
+        solRecord.push(await balanceDelta(delta,true));
+        solRecord.push(val); 
+      } else {
+        solRecord.push(0);
+        solRecord.push(await balanceDelta(delta,true));
+        solRecord.push(val); 
+      }
+    }
+  }
+  return solRecord;
+}
+
 async function fnn() {
     record.splice(0);
     record.push('txid');
@@ -97,89 +159,18 @@ async function fnn() {
     const fetched = await con.getConfirmedSignaturesForAddress2(pubkey);
     const signatures = fetched.map(val => val['signature']);
     for (let i = 0; i < signatures.length ; i++ ) {
-        const value2 = await con.getParsedConfirmedTransaction(signatures[i]);
+        const tx = await con.getParsedConfirmedTransaction(signatures[i]);
 	record.splice(0);
 	record.push(signatures[i]);
-	let dateTime = new Date(value2.blockTime * 1000);
+	let dateTime = new Date(tx.blockTime * 1000);
 	record.push(dateTime.toString());
-	let fee123 = await lamportsToSolString(value2.meta.fee);
-        for (let j = 0; j < value2.transaction.message.accountKeys.length; j++ ) {
-	    const value31 = value2.transaction.message.accountKeys[j];
-	    const pre = value2.meta.preBalances[j];
-	    const post = value2.meta.postBalances[j];
-	    const pubkey = value31.pubkey;
-	    const key = value31.pubkey.toBase58();
-	    const delta = new BigNumber(post).minus(new BigNumber(pre));
-	    const sol = await lamportsToSol(post);
-	    const maximumFractionDigits = 9
-	    const val = new Intl.NumberFormat("en-US", { maximumFractionDigits }).format(sol);
-	    const val222 = [key]; 
-	    val222.push(": ");
-            val222.push(await balanceDelta(delta,true));
-	    val222.push(":" + val); 
-	    if (j === 0) {
-		val222.push(": Fee Payer");
-	    }
-	    if (!value31.writable) {
-		val222.push(": Readonly");
-	    }
-	    if (value31.signer) {
-		val222.push(": Signer");
-	    }
-	    if (value2.transaction.message.instructions.find((ix) => ix.programId.equals(pubkey))) {
-		val222.push(": Program");
-	    }
-	    if (key === process.argv[2]) {
-	      if (j === 0) {
-		  record.push(fee123);
-		  record.push(await balanceDelta(delta,true));
-	          record.push(val); 
-	      } else {
-		  record.push(0);
-		  record.push(await balanceDelta(delta,true));
-	          record.push(val); 
-	      }
-	    }
-	}
-        const accouts = value2.transaction.message.accountKeys.map(aiueo => aiueo.pubkey.toString());
-	let preTokenBalances2 = {};
-        if (value2.meta.preTokenBalances.length > 0) {
-            for (let j = 0; j < value2.meta.preTokenBalances.length; j++ ) {
-	        const value3 = value2.meta.preTokenBalances[j];
-	        const account2 = accouts[value3['accountIndex']];
-		if (await fn3(account2)) {
-		    preTokenBalances2[account2] = value3.uiTokenAmount.uiAmount;
-		}
-            }
-	}
-	if (value2.meta.postTokenBalances.length > 0) {
-            for (let j = 0; j < value2.meta.postTokenBalances.length; j++ ) {
-	        const value3 = value2.meta.postTokenBalances[j];
-	        const account2 = accouts[value3['accountIndex']];
-		if (await fn3(account2)) {
-	            let preAmount;
-		    if (preTokenBalances2[account2]) {
-			    preAmount = preTokenBalances2[account2];
-		    } else {
-			    preAmount = 0;
-		    }
-		    let postAmount;
-		    if (value3.uiTokenAmount.uiAmount != null) {
-			    postAmount = value3.uiTokenAmount.uiAmount;
-		    } else {
-			    postAmount = 0;
-		    }
-	            const delta = new BigNumber(postAmount).minus(new BigNumber(preAmount));
-	            if (tokenMap[value3['mint']]) {
-	                record.push(tokenMap[value3['mint']]); 
-		    } else {
-	                record.push(value3['mint']); 
-		    }
-	            record.push(delta); 
-	            record.push(postAmount); 
-		}
-            }
-	}
+	let fee = await lamportsToSolString(tx.meta.fee);
+	const solRecord = await createSolBalance(tx, fee); 
+	record = record.concat(solRecord);
+        const pubkeys = tx.transaction.message.accountKeys.map(value => value.pubkey.toString());
+	let preTokenBalancesMap = await createTokenBalancesMap(tx.meta.preTokenBalances, pubkeys);
+	const tokenBalanceRecord = await createTokenBalance(tx.meta.postTokenBalances, pubkeys, preTokenBalancesMap); 
+	record = record.concat(tokenBalanceRecord);
 	console.log(record.join(','));
     }
 }
