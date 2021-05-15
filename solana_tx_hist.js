@@ -1,6 +1,7 @@
 const solanaWeb3 = require('@solana/web3.js');
 //import { BigNumber } from "bignumber.js";
 const BigNumber = require('bignumber.js');
+const fs = require('fs');
 
 let pubkey = new solanaWeb3.PublicKey(process.argv[2]);
 let con = new solanaWeb3.Connection("https://api.mainnet-beta.solana.com");
@@ -9,12 +10,15 @@ let record = [];
 
 const maximumFractionDigits = 9;
 
+const tokenMap = JSON.parse(fs.readFileSync('./token.json', 'utf8'));
+/*
 const tokenMap = {
 	'4k3Dyjzvzp8eMZWUXbBCjEvwSkkk59S5iCNLY3QrkX6R':'RAY',
 	'8PMHT4swUMtBzgHnh5U564N5sjPSiUz2cjEQzFnnP1Fo':'ROPE',
 	'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v':'USDC',
 	'6SfhBAmuaGf9p3WAxeHJYCWMABnYUMrdzNdK5Stvvj4k':'Orca ROPE/SOL'
 }
+*/
 
 let accountInfoMap = {};
 
@@ -85,6 +89,7 @@ async function balanceDelta(delta, isSol) {
 async function fnn() {
     record.splice(0);
     record.push('txid');
+    record.push('date time');
     record.push('fee');
     record.push('feepayer');
     record.push('sol delta');
@@ -94,14 +99,18 @@ async function fnn() {
     const signatures = fetched.map(val => val['signature']);
     for (let i = 0; i < signatures.length ; i++ ) {
         const value2 = await con.getParsedConfirmedTransaction(signatures[i]);
+	//console.log(value2);
         //console.log('');
         //console.log('***** start *****');
         //console.log(signatures[i]);
 	record.splice(0);
 	record.push(signatures[i]);
+	let dateTime = new Date(value2.blockTime * 1000);
+	record.push(dateTime.toString());
         //console.log('');
         //console.log('fee:' + await lamportsToSolString(value2.meta.fee));
-	record.push(await lamportsToSolString(value2.meta.fee));
+	//record.push(await lamportsToSolString(value2.meta.fee));
+	let fee123 = await lamportsToSolString(value2.meta.fee);
         for (let j = 0; j < value2.transaction.message.accountKeys.length; j++ ) {
 	    const value31 = value2.transaction.message.accountKeys[j];
 	    const pre = value2.meta.preBalances[j];
@@ -138,12 +147,12 @@ async function fnn() {
 	    if (key === process.argv[2]) {
 	      if (j === 0) {
 	          //console.log(val222.join(''));
-		  record.push('true');
+		  record.push(fee123);
 		  record.push(await balanceDelta(delta,true));
 	          record.push(val); 
 	      } else {
 	          //console.log(val222.join(''));
-		  record.push('false');
+		  record.push(0);
 		  record.push(await balanceDelta(delta,true));
 	          record.push(val); 
 	      }
@@ -224,4 +233,6 @@ async function fnn() {
     }
 }
 
+//console.log(tokenMap);
+//console.log(tokenMap['6SfhBAmuaGf9p3WAxeHJYCWMABnYUMrdzNdK5Stvvj4k']);
 fnn();
