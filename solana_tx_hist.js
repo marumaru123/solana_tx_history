@@ -3,6 +3,8 @@ const solanaWeb3 = require('@solana/web3.js');
 const BigNumber = require('bignumber.js');
 const fs = require('fs');
 
+const _sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
 let pubkey = new solanaWeb3.PublicKey(process.argv[2]);
 let con = new solanaWeb3.Connection("https://api.mainnet-beta.solana.com");
 
@@ -172,6 +174,9 @@ async function fnn() {
 	const tokenBalanceRecord = await createTokenBalance(tx.meta.postTokenBalances, pubkeys, preTokenBalancesMap); 
 	record = record.concat(tokenBalanceRecord);
 	console.log(record.join(','));
+	if (i % 10 == 0) {
+		await _sleep(2000);
+	}
     }
 }
 
