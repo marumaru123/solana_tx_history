@@ -91,17 +91,26 @@ async function createTokenBalancesMap(tokenBalances, pubkeys) {
   return tokenBalancesMap;
 }
 
-async function createTokenBalance(postTokenBalances, pubkeys, preTokenBalancesMap) {
-  let tokenBalanceRecord = [];
+async function createTokenBalance(postTokenBalances, pubkeys, preTokenBalancesMap, balancesMap) {
+  var player = new Object();
   for (let i = 0; i < postTokenBalances.length; i++ ) {
     const postTokenBalance = postTokenBalances[i];
     const pubkey = pubkeys[postTokenBalance['accountIndex']];
     if (await fn3(pubkey)) {
+      let tokenBalanceRecord = [];
       let preAmount  = preTokenBalancesMap[pubkey] ? preTokenBalancesMap[pubkey] : 0;
       const uiAmount = postTokenBalance.uiTokenAmount.uiAmount;
       let postAmount = uiAmount != null ? uiAmount : 0;
       const delta    = new BigNumber(postAmount).minus(new BigNumber(preAmount));
       const mint     = postTokenBalance['mint'];
+      let size;
+      if (balancesMap.has(mint)) {
+	      size = balancesMap.get(mint);
+      } else {
+	      size = balancesMap.size;
+	      size++;
+	      balancesMap.set(mint, size);
+      }
       if (tokenMap[mint]) {
          tokenBalanceRecord.push(tokenMap[mint]); 
       } else {
@@ -109,9 +118,24 @@ async function createTokenBalance(postTokenBalances, pubkeys, preTokenBalancesMa
       }
       tokenBalanceRecord.push(delta); 
       tokenBalanceRecord.push(postAmount); 
+      player[size] = tokenBalanceRecord;
     }
   }
-  return tokenBalanceRecord;
+  let tokenBalanceRecord2 = [];
+  let keys = Object.keys(player);
+  keys.sort();
+  let offset = 1;
+  for(key of keys) {
+     let offset2 = key - offset;
+     for(let i = 0; i < offset2; i++) {
+       tokenBalanceRecord2.push("");
+       tokenBalanceRecord2.push("");
+       tokenBalanceRecord2.push("");
+     }
+     tokenBalanceRecord2.push(player[key]);
+     offset = key + 1;
+  }
+  return tokenBalanceRecord2;
 }
 
 async function createSolBalance(tx, fee) {
@@ -158,8 +182,14 @@ async function fnn() {
     record.push('currency3 delta');
     record.push('currency3 post amount');
     console.log(record.join(','));
-    const fetched = await con.getConfirmedSignaturesForAddress2(pubkey);
+    let param1;
+    if (process.argv.length > 3) {
+	    console.log(process.argv[3]);
+	    param1 = {before: process.argv[3]};
+    }
+    const fetched = await con.getConfirmedSignaturesForAddress2(pubkey,param1);
     const signatures = fetched.map(val => val['signature']);
+    const balancesMap = new Map();
     for (let i = 0; i < signatures.length ; i++ ) {
         const tx = await con.getParsedConfirmedTransaction(signatures[i]);
 	record.splice(0);
@@ -171,7 +201,7 @@ async function fnn() {
 	record = record.concat(solRecord);
         const pubkeys = tx.transaction.message.accountKeys.map(value => value.pubkey.toString());
 	let preTokenBalancesMap = await createTokenBalancesMap(tx.meta.preTokenBalances, pubkeys);
-	const tokenBalanceRecord = await createTokenBalance(tx.meta.postTokenBalances, pubkeys, preTokenBalancesMap); 
+	const tokenBalanceRecord = await createTokenBalance(tx.meta.postTokenBalances, pubkeys, preTokenBalancesMap, balancesMap); 
 	record = record.concat(tokenBalanceRecord);
 	console.log(record.join(','));
 	if (i % 10 == 0) {
