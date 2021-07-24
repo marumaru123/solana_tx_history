@@ -127,13 +127,13 @@ async function createTokenBalance(postTokenBalances, pubkeys, preTokenBalancesMa
   let offset = 1;
   for(key of keys) {
      let offset2 = key - offset;
-     for(let i = 0; i < offset2; i++) {
+     for(let i = offset; i < key; i++) {
        tokenBalanceRecord2.push("");
        tokenBalanceRecord2.push("");
        tokenBalanceRecord2.push("");
      }
      tokenBalanceRecord2.push(player[key]);
-     offset = key + 1;
+     offset = parseInt(key) + 1;
   }
   return tokenBalanceRecord2;
 }
