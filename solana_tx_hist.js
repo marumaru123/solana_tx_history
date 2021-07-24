@@ -14,6 +14,10 @@ const maximumFractionDigits = 9;
 
 const tokenMap = JSON.parse(fs.readFileSync('./token.json', 'utf8'));
 
+var f123 = function (a, b) {
+    return a - b;
+}
+
 let accountInfoMap = {};
 
 async function fn3(sig) {
@@ -123,10 +127,9 @@ async function createTokenBalance(postTokenBalances, pubkeys, preTokenBalancesMa
   }
   let tokenBalanceRecord2 = [];
   let keys = Object.keys(player);
-  keys.sort();
+  keys.sort(f123);
   let offset = 1;
   for(key of keys) {
-     let offset2 = key - offset;
      for(let i = offset; i < key; i++) {
        tokenBalanceRecord2.push("");
        tokenBalanceRecord2.push("");
@@ -165,7 +168,7 @@ async function createSolBalance(tx, fee) {
   return solRecord;
 }
 
-async function fnn() {
+async function printHeader() {
     record.splice(0);
     record.push('txid');
     record.push('date time');
@@ -182,32 +185,54 @@ async function fnn() {
     record.push('currency3 delta');
     record.push('currency3 post amount');
     console.log(record.join(','));
-    let param1;
-    if (process.argv.length > 3) {
-	    console.log(process.argv[3]);
-	    param1 = {before: process.argv[3]};
-    }
-    const fetched = await con.getConfirmedSignaturesForAddress2(pubkey,param1);
+}
+
+async function fnn(param1, balancesMap) {
+    const fetched    = await con.getConfirmedSignaturesForAddress2(pubkey,param1);
     const signatures = fetched.map(val => val['signature']);
-    const balancesMap = new Map();
     for (let i = 0; i < signatures.length ; i++ ) {
-        const tx = await con.getParsedConfirmedTransaction(signatures[i]);
+        const tx                  = await con.getParsedConfirmedTransaction(signatures[i]);
+	let   dateTime            = new Date(tx.blockTime * 1000);
+	let   fee                 = await lamportsToSolString(tx.meta.fee);
+	const solRecord           = await createSolBalance(tx, fee); 
+        const pubkeys             = tx.transaction.message.accountKeys.map(value => value.pubkey.toString());
+	let   preTokenBalancesMap = await createTokenBalancesMap(tx.meta.preTokenBalances, pubkeys);
+	const tokenBalanceRecord  = await createTokenBalance(tx.meta.postTokenBalances, pubkeys, preTokenBalancesMap, balancesMap); 
 	record.splice(0);
 	record.push(signatures[i]);
-	let dateTime = new Date(tx.blockTime * 1000);
 	record.push(dateTime.toString());
-	let fee = await lamportsToSolString(tx.meta.fee);
-	const solRecord = await createSolBalance(tx, fee); 
 	record = record.concat(solRecord);
-        const pubkeys = tx.transaction.message.accountKeys.map(value => value.pubkey.toString());
-	let preTokenBalancesMap = await createTokenBalancesMap(tx.meta.preTokenBalances, pubkeys);
-	const tokenBalanceRecord = await createTokenBalance(tx.meta.postTokenBalances, pubkeys, preTokenBalancesMap, balancesMap); 
 	record = record.concat(tokenBalanceRecord);
 	console.log(record.join(','));
 	if (i % 10 == 0) {
-		await _sleep(2000);
+            await _sleep(2000);
 	}
+    }
+    if (signatures.length !== 0) {
+	return signatures[signatures.length - 1];
+    } else {
+        return null;
     }
 }
 
-fnn();
+async function fnn1() {
+
+    const balancesMap = new Map();
+    let param1;
+    if (process.argv.length > 3) {
+        console.log(process.argv[3]);
+        param1 = {before: process.argv[3]};
+    }
+
+    await printHeader();
+    let result1 = await fnn(param1, balancesMap);
+    console.log(param1);
+    while (result1 != null) {
+        param1 = {before: result1};
+        console.log(param1);
+        result1 = await fnn(param1, balancesMap);
+    }
+
+}
+
+fnn1();
